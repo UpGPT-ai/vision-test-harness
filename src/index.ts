@@ -13,7 +13,7 @@ import { TOOLS, TestRunParams, InspectViewParams, ScreenshotParams, CompareScree
 import { runSuite } from './runner/suite-runner.js';
 import { compareImages } from './screenshot/diff.js';
 import { generateHtmlReport } from './report/html-report.js';
-import { getStatus, login, logout } from './client.js';
+import { getStatus, getConfig, login, logout } from './client.js';
 import { parse as parseYaml } from 'yaml';
 import { TestSuiteSchema } from './schema.js';
 import { connectToChrome } from './browser/chrome-connect.js';
@@ -161,6 +161,62 @@ async function cliCapture(args: string[]): Promise<void> {
   await context.close();
 }
 
+// ─── Auth gating ─────────────────────────────────────────────────────────────
+
+// Tools that require a free account (login required, any tier)
+const AUTH_REQUIRED_TOOLS = new Set([
+  'test_run', 'compare_screenshots', 'screenshot',
+  'generate_cws_assets', 'seed_test_data', 'inspect_view',
+]);
+
+// Tools that require a paid account (Pro or Team)
+const PAID_REQUIRED_TOOLS = new Set([
+  'inspect_view',
+]);
+
+// Tools that work without auth (discovery only)
+const PUBLIC_TOOLS = new Set(['list_test_suites']);
+
+function checkAuth(toolName: string): { allowed: boolean; error?: string } {
+  if (PUBLIC_TOOLS.has(toolName)) return { allowed: true };
+
+  const config = getConfig();
+  if (!config.token) {
+    return {
+      allowed: false,
+      error: [
+        `Authentication required to use "${toolName}".`,
+        '',
+        'Create a free account at https://upgpt.ai/tools/test-harness',
+        'Then run: vision-test-harness login <email> <password>',
+        '',
+        'Free accounts get: test_run, compare_screenshots, seed_test_data, generate_cws_assets',
+        'Pro accounts ($29/mo) add: inspect_view (AI-powered visual diagnosis)',
+      ].join('\n'),
+    };
+  }
+
+  if (PAID_REQUIRED_TOOLS.has(toolName)) {
+    const tier = config.tier ?? 'free';
+    if (tier === 'free') {
+      return {
+        allowed: false,
+        error: [
+          `"${toolName}" requires a Pro or Team subscription.`,
+          '',
+          `You are on the Free tier (${config.email}).`,
+          'Upgrade at https://upgpt.ai/tools/test-harness#pricing',
+          '',
+          'Pro ($29/mo): 500 AI inspections/mo, Claude-powered diagnosis, BYOK support',
+          'Team ($99/mo): 2,000 inspections, shared baselines, priority support',
+        ].join('\n'),
+      };
+    }
+  }
+
+  return { allowed: true };
+}
+
 // ─── MCP server ───────────────────────────────────────────────────────────────
 
 async function startServer(): Promise<void> {
@@ -179,6 +235,15 @@ async function startServer(): Promise<void> {
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+
+    // ── Auth gate ──
+    const auth = checkAuth(name);
+    if (!auth.allowed) {
+      return {
+        content: [{ type: 'text' as const, text: auth.error! }],
+        isError: true,
+      };
+    }
 
     try {
       switch (name) {
