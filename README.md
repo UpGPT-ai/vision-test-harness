@@ -53,7 +53,7 @@ vision-test-harness capture gmail
 
 ### Free (MIT License)
 
-- 15 step types: navigate, click, type, wait, assert, screenshot, compare, evaluate, privacy overlay, and more
+- 16 step types: navigate, click, type, wait, assert, screenshot, compare, evaluate, privacy overlay, and more
 - Chrome extension testing with localhost sidebar server
 - WordPress plugin testing (wp_login, wp_activate_plugin, wp_navigate_admin, wp_assert_notice)
 - Shopify app testing with iframe navigation
@@ -112,9 +112,10 @@ The test harness runs as an [MCP server](https://modelcontextprotocol.io/) with 
 - action: screenshot      # Capture screenshot (viewport, fullPage, clip, selector)
 - action: compare         # Compare against baseline screenshot
 - action: evaluate        # Run JavaScript (async supported)
-- action: open_side_panel # Open Chrome extension side panel
-- action: privacy_overlay # Replace real data with demo content
-- action: wp_login        # WordPress admin login
+- action: open_side_panel         # Open Chrome extension side panel
+- action: wait_for_content_script # Wait for content script injection
+- action: privacy_overlay         # Replace real data with demo content
+- action: wp_login                # WordPress admin login
 - action: wp_activate_plugin
 - action: wp_navigate_admin
 - action: wp_assert_notice
