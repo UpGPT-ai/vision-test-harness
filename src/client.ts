@@ -39,7 +39,7 @@ function saveConfig(config: ClientConfig): void {
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export async function login(email: string, password: string): Promise<ClientConfig> {
-  const resp = await fetch(`${PREMIUM_API}/auth/login`, {
+  const resp = await fetch('https://upgpt.ai/api/v1/licenses/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -49,10 +49,28 @@ export async function login(email: string, password: string): Promise<ClientConf
     throw new Error(`Login failed: ${await resp.text()}`);
   }
 
-  const data = (await resp.json()) as { token: string; tier: ClientConfig['tier'] };
+  const data = (await resp.json()) as { token: string; tier: ClientConfig['tier']; license_key?: string };
   const config: ClientConfig = { ...getConfig(), token: data.token, email, tier: data.tier };
   saveConfig(config);
   return config;
+}
+
+export async function signup(email: string, password: string): Promise<{ license_key: string | null; tier: string }> {
+  const resp = await fetch('https://upgpt.ai/api/v1/licenses/auth/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!resp.ok) {
+    throw new Error(`Signup failed: ${await resp.text()}`);
+  }
+
+  const data = (await resp.json()) as { token: string; tier: string; license_key: string | null; email: string };
+  // Persist the session so the user is logged in immediately after signup
+  const config: ClientConfig = { ...getConfig(), token: data.token, email, tier: data.tier as ClientConfig['tier'] };
+  saveConfig(config);
+  return { license_key: data.license_key, tier: data.tier };
 }
 
 export function logout(): void {
@@ -117,4 +135,60 @@ export function getStatus(): { loggedIn: boolean; email?: string; tier?: string;
     tier: config.tier,
     hasByok: !!config.byok_key,
   };
+}
+
+export interface RemoteStatus {
+  loggedIn: boolean;
+  email?: string;
+  tier?: string;
+  license_key?: string | null;
+  credits_remaining?: number;
+  expires_at?: string | null;
+  hasByok: boolean;
+  source: 'remote' | 'local';
+}
+
+export async function getRemoteStatus(): Promise<RemoteStatus> {
+  const config = getConfig();
+  const local: RemoteStatus = {
+    loggedIn: !!config.token,
+    email: config.email,
+    tier: config.tier,
+    hasByok: !!config.byok_key,
+    source: 'local',
+  };
+
+  if (!config.token) return local;
+
+  try {
+    const resp = await fetch('https://upgpt.ai/api/v1/licenses/auth/status', {
+      headers: { Authorization: `Bearer ${config.token}` },
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!resp.ok) return { ...local, source: 'local' };
+
+    const data = (await resp.json()) as {
+      loggedIn: boolean;
+      email?: string;
+      tier?: string;
+      license_key?: string | null;
+      credits_remaining?: number;
+      expires_at?: string | null;
+    };
+
+    return {
+      loggedIn: data.loggedIn,
+      email: data.email ?? config.email,
+      tier: data.tier ?? config.tier,
+      license_key: data.license_key,
+      credits_remaining: data.credits_remaining,
+      expires_at: data.expires_at,
+      hasByok: !!config.byok_key,
+      source: 'remote',
+    };
+  } catch {
+    // Offline fallback — return local config
+    return { ...local, source: 'local' };
+  }
 }
