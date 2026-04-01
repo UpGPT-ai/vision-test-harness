@@ -1,0 +1,53 @@
+{
+  "name": "@upgpt/vision-test-harness",
+  "version": "0.1.0",
+  "description": "AI-powered visual testing for Chrome extensions, WordPress plugins, and web apps",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "vision-test-harness": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "visual-testing",
+    "visual-regression",
+    "playwright",
+    "screenshot",
+    "ai-testing",
+    "mcp",
+    "chrome-extension",
+    "wordpress",
+    "pixel-diff",
+    "test-automation",
+    "upgpt"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gbibas/vision-test-harness.git"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "pixelmatch": "^6.0.0",
+    "playwright": "^1.50.0",
+    "pngjs": "^7.0.0",
+    "sharp": "^0.34.0",
+    "yaml": "^2.0.0",
+    "zod": "^3.22.0",
+    "zod-to-json-schema": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pngjs": "^6.0.0",
+    "typescript": "^5.0.0"
+  }
+}

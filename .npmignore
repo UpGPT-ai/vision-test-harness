@@ -1,0 +1,8 @@
+src/
+test-suites/
+__reports__/
+__marketing__/
+__baselines__/
+node_modules/
+.env*
+tsconfig.json

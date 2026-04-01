@@ -1,0 +1,102 @@
+name: Visual Regression Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  visual-regression:
+    name: Run Visual Regression Suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run visual test suite
+        id: test
+        run: |
+          npx vision-test-harness run --suite ${{ github.event.inputs.suite || 'default' }} --output __reports__/ci
+        env:
+          VISION_API_TOKEN: ${{ secrets.VISION_API_TOKEN }}
+          VISION_BASE_URL: ${{ vars.VISION_BASE_URL || 'http://localhost:3000' }}
+
+      - name: Upload screenshots as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-regression-screenshots-${{ github.run_number }}
+          path: |
+            __reports__/ci/
+            __baselines__/
+          retention-days: 14
+
+      - name: Comment PR with results
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = '__reports__/ci/summary.json';
+            let body = '## Visual Regression Results\n\n';
+
+            if (fs.existsSync(path)) {
+              const summary = JSON.parse(fs.readFileSync(path, 'utf8'));
+              const passed = summary.passed ?? 0;
+              const failed = summary.failed ?? 0;
+              const total = summary.total ?? 0;
+              const icon = failed === 0 ? '✅' : '❌';
+
+              body += `${icon} **${passed}/${total} tests passed**\n\n`;
+
+              if (failed > 0) {
+                body += `### Failed Tests\n\n`;
+                (summary.failures ?? []).forEach(f => {
+                  body += `- **${f.name}**: ${f.reason}\n`;
+                });
+                body += '\n';
+              }
+
+              if (summary.newScreenshots && summary.newScreenshots.length > 0) {
+                body += `### New Baselines Captured\n\n`;
+                summary.newScreenshots.forEach(s => {
+                  body += `- \`${s}\`\n`;
+                });
+                body += '\n';
+              }
+
+              body += `\n> Run #${context.runNumber} — [View full report](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`;
+            } else {
+              const outcome = '${{ steps.test.outcome }}';
+              if (outcome === 'failure') {
+                body += '❌ Test suite failed to run. Check the [workflow logs](' +
+                  `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.`;
+              } else {
+                body += '⚠️ No summary report found. Screenshots may still be available in artifacts.';
+              }
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
