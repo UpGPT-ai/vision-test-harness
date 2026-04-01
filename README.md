@@ -4,8 +4,9 @@
 
 Write YAML test suites. Playwright captures screenshots. AI diagnoses what's wrong.
 
-```
+```bash
 npm install -g @upgpt/vision-test-harness
+npx playwright install chromium
 ```
 
 ## What It Does
