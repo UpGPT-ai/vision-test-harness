@@ -1,19 +1,40 @@
 # Vision Test Harness
 
-**AI-powered visual testing for Chrome extensions, WordPress plugins, Shopify apps, and web apps.**
+[![Vision Tests](https://img.shields.io/badge/tested%20with-Vision%20Test%20Harness-34d399?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgZmlsbD0id2hpdGUiIHZpZXdCb3g9IjAgMCAxNiAxNiI+PHBhdGggZD0iTTggMWE3IDcgMCAxMDAgMTRBNyA3IDAgMDA4IDFaTTUgOGwxLjUtMS41TDggOGwxLjUtMS41TDExIDhsLTMgMy0zLTN6Ii8+PC9zdmc+)](https://upgpt.ai/tools/test-harness)
 
-Write YAML test suites. Playwright captures screenshots. AI diagnoses what's wrong.
+**Give AI eyes to see and fix your UI.**
+
+Write YAML test suites. Playwright captures screenshots. AI diagnoses what's broken and tells you how to fix it.
+
+Works with websites, web apps, Chrome extensions, WordPress plugins, Shopify apps — anything with a UI.
+
+> **This README was tested by the tool it describes.** The screenshots below were captured by Vision Test Harness running against its own product page. The report screenshot shows the tool's results from testing the UpGPT website — 5 flows, 31 steps, all passing. A tool that tests and documents itself.
 
 ```bash
 npm install -g @upgpt/vision-test-harness
 npx playwright install chromium
 ```
 
-## What It Does
+## Screenshots
 
-1. **Write a YAML test suite** — define flows, seed data, capture screenshots
-2. **Run tests** — Playwright automates the browser, captures screenshots at each step
-3. **AI diagnoses failures** (Pro) — Claude sees your screenshot + console logs + source code + feature spec and tells you exactly what's wrong
+**The test harness testing its own product page:**
+
+![HTML Report — 5/5 flows passing](https://raw.githubusercontent.com/UpGPT-ai/vision-test-harness/main/docs/screenshots/report-overview.png)
+
+**The product page it tested:**
+
+![Hero Section](https://raw.githubusercontent.com/UpGPT-ai/vision-test-harness/main/docs/screenshots/test-harness-hero.png)
+
+![Report footer with UpGPT attribution](https://raw.githubusercontent.com/UpGPT-ai/vision-test-harness/main/docs/screenshots/report-footer.png)
+
+## The Test-Diagnose-Fix Loop
+
+1. **Write a YAML test suite** — describe what your UI should look like
+2. **Run tests** — Playwright captures screenshots, diffs against baselines
+3. **AI diagnoses failures** (Pro) — Claude reads your screenshot + console + source and tells you the fix
+4. **You fix it, re-run** — repeat until green
+
+This is the loop that caught 12 bugs in 4 rounds during our own development. The AI doesn't just say "something changed" — it tells you which file, which line, and why.
 
 ## Quick Start
 
@@ -38,6 +59,25 @@ flows:
         state: visible
 ```
 
+```yaml
+# website.test.yaml
+name: my-website
+type: web-app
+base_url: https://mysite.com
+
+flows:
+  - name: homepage
+    steps:
+      - action: navigate
+        url: /
+        waitUntil: networkidle
+      - action: screenshot
+        name: homepage
+      - action: assert_element
+        selector: "nav"
+        visible: true
+```
+
 ```bash
 # Run as MCP server (for Claude Code / AI assistants)
 vision-test-harness
@@ -45,9 +85,26 @@ vision-test-harness
 # Run directly from CLI
 vision-test-harness run my-app
 
+# Run a specific flow
+vision-test-harness run my-website homepage
+
 # Capture marketing screenshots from real Chrome
 vision-test-harness capture gmail
+
+# Generate a badge for your README
+vision-test-harness badge markdown
 ```
+
+## What You Can Test
+
+| Platform | How It Works |
+|----------|-------------|
+| **Websites & Landing Pages** | Set `base_url`, navigate pages, screenshot at any viewport |
+| **Web Applications** | Multi-step flows: login, navigate, interact, assert |
+| **Chrome Extensions** | Localhost sidebar server, chrome.storage polyfill, content script testing |
+| **WordPress Plugins** | Built-in steps: `wp_login`, `wp_activate_plugin`, `wp_navigate_admin`, `wp_assert_notice` |
+| **Shopify Apps** | Admin iframe navigation, storefront verification |
+| **Marketing Screenshots** | Real Chrome + privacy overlay to replace user data with demo content |
 
 ## Features
 
@@ -56,18 +113,18 @@ vision-test-harness capture gmail
 - 16 step types: navigate, click, type, wait, assert, screenshot, compare, evaluate, privacy overlay, and more
 - Chrome extension testing with localhost sidebar server
 - WordPress plugin testing (wp_login, wp_activate_plugin, wp_navigate_admin, wp_assert_notice)
-- Shopify app testing with iframe navigation
 - Pixel-diff screenshot comparison via pixelmatch
 - Self-contained HTML reports with embedded screenshots
 - Privacy overlay for marketing screenshots (replaces real data with demo content)
-- GitHub Actions CI/CD workflow
 - Chrome storage polyfill for automated testing
 - IndexedDB seeding for SPA state injection
 - MCP server integration (works with Claude Code, Cursor, etc.)
+- CI/CD ready (GitHub Actions workflow included)
+- Badge generation for your README
 
 ### Pro ($29/mo)
 
-- AI Vision Inspection — Claude analyzes screenshots + console + source + view skills
+- AI Vision Inspection — Claude analyzes screenshots + console + source
 - Self-debugging loop: run tests, AI diagnoses, you fix, repeat
 - BYOK (bring your own Claude/OpenAI key)
 - Attribution-free reports
@@ -92,6 +149,20 @@ The test harness runs as an [MCP server](https://modelcontextprotocol.io/) with 
 | `generate_cws_assets` | Generate Chrome Web Store listing images |
 | `seed_test_data` | Inject test data into browser storage |
 
+## CLI Commands
+
+| Command | What It Does |
+|---------|-------------|
+| `vision-test-harness` | Start MCP server (default) |
+| `vision-test-harness run <suite> [flow]` | Run a test suite |
+| `vision-test-harness list [directory]` | List available test suites |
+| `vision-test-harness connect` | Connect to real Chrome via CDP |
+| `vision-test-harness capture <preset>` | Marketing screenshots with privacy overlay |
+| `vision-test-harness badge [markdown\|svg]` | Generate a README badge |
+| `vision-test-harness login <email> <password>` | Log in to your account |
+| `vision-test-harness logout` | Log out |
+| `vision-test-harness status` | Show account status |
+
 ## Test Modes
 
 | Mode | Use Case | Command |
@@ -103,7 +174,7 @@ The test harness runs as an [MCP server](https://modelcontextprotocol.io/) with 
 ## Step Types
 
 ```yaml
-- action: navigate        # Go to a URL
+- action: navigate        # Go to a URL (absolute or relative to base_url)
 - action: click           # Click an element
 - action: type            # Type text into an input
 - action: wait            # Wait for selector or duration
@@ -143,6 +214,17 @@ Capture marketing screenshots from a real browser session with automatic PII rep
 
 Replaces sender names, email subjects, snippets with demo data. Preserves injected UI elements (sparklines, badges). Your real data never appears in screenshots.
 
+## Auth & Account
+
+A free account is required to run tests via the MCP server or CLI. Create one at [upgpt.ai/tools/test-harness/signup](https://upgpt.ai/tools/test-harness/signup).
+
+```bash
+vision-test-harness login you@example.com yourpassword
+vision-test-harness status
+```
+
+Free accounts include all CLI features. AI visual diagnosis requires a Pro subscription.
+
 ## License
 
 MIT - Free to use, modify, and distribute.
@@ -151,4 +233,4 @@ Attribution required on free tier: reports include "Tested with Vision Test Harn
 
 ---
 
-Built by [UpGPT](https://upgpt.ai) | [Product Page](https://upgpt.ai/tools/test-harness) | [Documentation](https://upgpt.ai/tools/test-harness)
+Built by [UpGPT](https://upgpt.ai) | [Product Page](https://upgpt.ai/tools/test-harness) | [Pricing](https://upgpt.ai/tools/test-harness#pricing)
