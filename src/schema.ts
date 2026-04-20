@@ -107,6 +107,42 @@ const WpAssertNoticeStepSchema = BaseStepSchema.extend({
   type: z.enum(['success', 'error', 'warning', 'info']).optional(),
 });
 
+const WpCreatePostStepSchema = BaseStepSchema.extend({
+  action: z.literal('wp_create_post'),
+  title: z.string(),
+  content: z.string(),
+  status: z.enum(['publish', 'draft']).optional(),
+  category: z.string().optional(),
+});
+
+const WpEditPageStepSchema = BaseStepSchema.extend({
+  action: z.literal('wp_edit_page'),
+  page_id: z.union([z.string(), z.number()]),
+  title: z.string().optional(),
+  content: z.string().optional(),
+});
+
+const WpCheckFrontendStepSchema = BaseStepSchema.extend({
+  action: z.literal('wp_check_frontend'),
+  slug: z.string(),
+});
+
+const WpWooCommerceAddProductStepSchema = BaseStepSchema.extend({
+  action: z.literal('wp_woocommerce_add_product'),
+  name: z.string(),
+  price: z.union([z.string(), z.number()]),
+  product_type: z.enum(['simple', 'variable']).optional(),
+  short_description: z.string().optional(),
+  sku: z.string().optional(),
+  publish: z.boolean().optional(),
+});
+
+const WpVerifyPluginSettingsStepSchema = BaseStepSchema.extend({
+  action: z.literal('wp_verify_plugin_settings'),
+  plugin_slug: z.string(),
+  expected_values: z.record(z.union([z.string(), z.boolean(), z.number()])),
+});
+
 // ─── Privacy overlay step ─────────────────────────────────────────────────────
 
 const PrivacyOverlayStepSchema = BaseStepSchema.extend({
@@ -143,6 +179,11 @@ export const StepSchema = z.discriminatedUnion('action', [
   WpActivatePluginStepSchema,
   WpNavigateAdminStepSchema,
   WpAssertNoticeStepSchema,
+  WpCreatePostStepSchema,
+  WpEditPageStepSchema,
+  WpCheckFrontendStepSchema,
+  WpWooCommerceAddProductStepSchema,
+  WpVerifyPluginSettingsStepSchema,
   PrivacyOverlayStepSchema,
 ]);
 

@@ -18,9 +18,10 @@ export const TestRunParams = z.object({
 });
 
 export const InspectViewParams = z.object({
-  selector: z.string().optional().describe('CSS selector to inspect (inspects full page if omitted)'),
+  screenshot_path: z.string().optional().describe('Path to a saved screenshot PNG to analyze (use this in MCP mode after test_run)'),
+  console_errors: z.array(z.string()).optional().describe('Console error strings to include in AI diagnosis context'),
   source_file: z.string().optional().describe('Source file path to include in inspection'),
-  include_source: z.boolean().optional().describe('Include source code in result'),
+  selector: z.string().optional().describe('CSS selector to inspect in connect mode (inspects full page if omitted)'),
 });
 
 export const ScreenshotParams = z.object({
@@ -72,7 +73,7 @@ export const TOOLS: ToolDescriptor[] = [
   },
   {
     name: 'inspect_view',
-    description: 'Vision-aware inspection of the current page. Returns screenshot, console logs, service worker logs, network errors, source code, and view skills. Free tier: screenshots + upgrade prompt. Paid tier: AI diagnosis.',
+    description: 'AI-powered inspection of a screenshot. Pass screenshot_path from a test_run result to get AI diagnosis of what broke and how to fix it. Requires ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY. In connect mode (CLI), inspects the live browser page.',
     inputSchema: InspectViewParams,
   },
   {

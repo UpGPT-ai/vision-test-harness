@@ -203,6 +203,7 @@ async function runFlow(
         wpClient,
         viewSkills: suite.view_skills,
         sidebarBaseUrl,
+        baseUrl: suite.base_url,
       });
       steps.push(result);
 

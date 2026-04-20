@@ -1,0 +1,9 @@
+node_modules/
+dist/
+__reports__/
+__marketing__/
+__baselines__/
+*.png
+.vision-test-harness.json
+.env
+.env.local

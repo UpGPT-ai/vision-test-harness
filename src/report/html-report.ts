@@ -127,7 +127,7 @@ export function generateHtmlReport(result: SuiteResult, outputPath: string): voi
   </div>
   ${result.flows.map(renderFlow).join('')}
   <footer>
-    Tested with <a href="https://upgpt.ai/tools/test-harness" target="_blank">Vision Test Harness</a> by
+    Tested with <a href="https://github.com/upgpt-ai/vision-test-harness" target="_blank">Vision Test Harness</a> by
     <a href="https://upgpt.ai" target="_blank">UpGPT</a>
   </footer>
 </body>

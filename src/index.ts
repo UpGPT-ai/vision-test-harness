@@ -13,7 +13,9 @@ import { TOOLS, TestRunParams, InspectViewParams, ScreenshotParams, CompareScree
 import { runSuite } from './runner/suite-runner.js';
 import { compareImages } from './screenshot/diff.js';
 import { generateHtmlReport } from './report/html-report.js';
-import { getStatus, getConfig, login, logout } from './client.js';
+import { diagnoseScreenshot } from './handlers/inspect-view.js';
+import { getStatus, getConfig, configureByok, clearByok } from './client.js';
+import { generateBadgeSvg, generateMarkdownBadge } from './badge.js';
 import { parse as parseYaml } from 'yaml';
 import { TestSuiteSchema } from './schema.js';
 import { connectToChrome } from './browser/chrome-connect.js';
@@ -100,6 +102,89 @@ async function generateCwsAssets(suiteName: string, outputDir = '__marketing__')
   return `Generated ${copied.length} assets in ${mktDir}`;
 }
 
+// ─── CLI: init ───────────────────────────────────────────────────────────────
+
+async function cliInit(args: string[]): Promise<void> {
+  const name = args[0] ?? 'my-app';
+  const dir = './test-suites';
+  const filePath = path.join(dir, `${name}.yaml`);
+
+  if (fs.existsSync(filePath)) {
+    console.error(`Test suite already exists: ${filePath}`);
+    console.log(`Run it with: vision-test-harness run ${name}`);
+    process.exit(1);
+  }
+
+  fs.mkdirSync(dir, { recursive: true });
+
+  const template = `# ${name} — Vision Test Harness suite
+# Docs: https://upgpt.ai/tools/test-harness
+#
+# Run this suite:
+#   vision-test-harness run ${name}
+
+name: ${name}
+type: web-app
+base_url: https://example.com    # ← Replace with your URL
+viewport: { width: 1280, height: 800 }
+
+flows:
+  - name: homepage
+    steps:
+      # Navigate to the homepage
+      - action: navigate
+        url: /
+        waitUntil: networkidle
+
+      # Take a screenshot
+      - action: screenshot
+        name: homepage
+
+      # Verify the page loaded
+      - action: assert_element
+        selector: "nav"
+        visible: true
+
+      # Check for expected text
+      # - action: assert_text
+      #   selector: "h1"
+      #   text: "Welcome"
+      #   contains: true
+
+  # - name: login-flow
+  #   steps:
+  #     - action: navigate
+  #       url: /login
+  #     - action: type
+  #       selector: "input[name=email]"
+  #       text: "test@example.com"
+  #     - action: type
+  #       selector: "input[name=password]"
+  #       text: "password123"
+  #     - action: click
+  #       selector: "button[type=submit]"
+  #     - action: wait
+  #       selector: "[data-testid=dashboard]"
+  #     - action: screenshot
+  #       name: dashboard
+
+# Step types: navigate, click, type, wait, assert_text, assert_element,
+# screenshot, compare, evaluate, privacy_overlay, wp_login, wp_activate_plugin,
+# wp_navigate_admin, wp_assert_notice, open_side_panel, wait_for_content_script
+`;
+
+  fs.writeFileSync(filePath, template, 'utf8');
+
+  console.log(`Created: ${filePath}`);
+  console.log('');
+  console.log('Next steps:');
+  console.log(`  1. Edit ${filePath} — set your base_url and add flows`);
+  console.log(`  2. vision-test-harness run ${name}`);
+  console.log('');
+  console.log('The YAML file has a working example and a commented-out login flow.');
+  console.log('Uncomment and customize the parts you need.');
+}
+
 // ─── CLI: run ─────────────────────────────────────────────────────────────────
 
 async function cliRun(args: string[]): Promise<void> {
@@ -117,7 +202,7 @@ async function cliRun(args: string[]): Promise<void> {
 
   const reportPath = path.join('__reports__', suite.name, 'report.html');
   generateHtmlReport(result, reportPath);
-  console.log(`Report: ${reportPath}`);
+  console.log(`\nReport: ${reportPath}`);
   console.log(`Status: ${result.status.toUpperCase()} (${result.flows.filter((f) => f.status === 'pass').length}/${result.flows.length} flows)`);
 
   if (result.status === 'fail') process.exit(1);
@@ -161,62 +246,6 @@ async function cliCapture(args: string[]): Promise<void> {
   await context.close();
 }
 
-// ─── Auth gating ─────────────────────────────────────────────────────────────
-
-// Tools that require a free account (login required, any tier)
-const AUTH_REQUIRED_TOOLS = new Set([
-  'test_run', 'compare_screenshots', 'screenshot',
-  'generate_cws_assets', 'seed_test_data', 'inspect_view',
-]);
-
-// Tools that require a paid account (Pro or Team)
-const PAID_REQUIRED_TOOLS = new Set([
-  'inspect_view',
-]);
-
-// Tools that work without auth (discovery only)
-const PUBLIC_TOOLS = new Set(['list_test_suites']);
-
-function checkAuth(toolName: string): { allowed: boolean; error?: string } {
-  if (PUBLIC_TOOLS.has(toolName)) return { allowed: true };
-
-  const config = getConfig();
-  if (!config.token) {
-    return {
-      allowed: false,
-      error: [
-        `Authentication required to use "${toolName}".`,
-        '',
-        'Create a free account at https://upgpt.ai/tools/test-harness',
-        'Then run: vision-test-harness login <email> <password>',
-        '',
-        'Free accounts get: test_run, compare_screenshots, seed_test_data, generate_cws_assets',
-        'Pro accounts ($29/mo) add: inspect_view (AI-powered visual diagnosis)',
-      ].join('\n'),
-    };
-  }
-
-  if (PAID_REQUIRED_TOOLS.has(toolName)) {
-    const tier = config.tier ?? 'free';
-    if (tier === 'free') {
-      return {
-        allowed: false,
-        error: [
-          `"${toolName}" requires a Pro or Team subscription.`,
-          '',
-          `You are on the Free tier (${config.email}).`,
-          'Upgrade at https://upgpt.ai/tools/test-harness#pricing',
-          '',
-          'Pro ($29/mo): 500 AI inspections/mo, Claude-powered diagnosis, BYOK support',
-          'Team ($99/mo): 2,000 inspections, shared baselines, priority support',
-        ].join('\n'),
-      };
-    }
-  }
-
-  return { allowed: true };
-}
-
 // ─── MCP server ───────────────────────────────────────────────────────────────
 
 async function startServer(): Promise<void> {
@@ -236,15 +265,6 @@ async function startServer(): Promise<void> {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
-    // ── Auth gate ──
-    const auth = checkAuth(name);
-    if (!auth.allowed) {
-      return {
-        content: [{ type: 'text' as const, text: auth.error! }],
-        isError: true,
-      };
-    }
-
     try {
       switch (name) {
         case 'list_test_suites': {
@@ -262,11 +282,27 @@ async function startServer(): Promise<void> {
           });
           const reportPath = path.join('__reports__', suite.name, 'report.html');
           generateHtmlReport(result, reportPath);
-          return { content: [{ type: 'text' as const, text: JSON.stringify({ ...result, report_path: reportPath }, null, 2) }] };
+
+          const response: Record<string, unknown> = { ...result, report_path: reportPath };
+
+          const mcpFailedFlows = result.flows.filter((f: { status: string }) => f.status === 'fail');
+          if (mcpFailedFlows.length > 0) {
+            response.inspect_hint = `${mcpFailedFlows.length} flow(s) failed. Call inspect_view with a screenshot_path from the results to get AI diagnosis.`;
+          }
+
+          return { content: [{ type: 'text' as const, text: JSON.stringify(response, null, 2) }] };
         }
 
         case 'inspect_view': {
-          return { content: [{ type: 'text' as const, text: JSON.stringify({ error: 'inspect_view requires an active browser session. Use CLI: vision-test-harness connect' }) }] };
+          const params = InspectViewParams.parse(args ?? {});
+          if (params.screenshot_path) {
+            const diagnosis = await diagnoseScreenshot(params.screenshot_path, {
+              console_errors: params.console_errors,
+              source_file: params.source_file,
+            });
+            return { content: [{ type: 'text' as const, text: JSON.stringify(diagnosis, null, 2) }] };
+          }
+          return { content: [{ type: 'text' as const, text: JSON.stringify({ error: 'Pass screenshot_path to analyze a saved screenshot, or use CLI: vision-test-harness connect for live inspection.' }) }] };
         }
 
         case 'screenshot': {
@@ -325,25 +361,120 @@ async function main(): Promise<void> {
     case 'list':
       console.log(JSON.stringify(listSuites(args[0]), null, 2));
       break;
-    case 'login': {
-      const [email, password] = args;
-      if (!email || !password) { console.error('Usage: vision-test-harness login <email> <password>'); process.exit(1); }
-      const config = await login(email, password);
-      console.log(`Logged in as ${config.email} (${config.tier})`);
+    case 'byok': {
+      const [provider, key] = args;
+      if (!provider || !key) {
+        console.error('Usage: vision-test-harness byok <anthropic|openai|gemini> <api-key>');
+        console.error('\nOr set env vars: ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY');
+        process.exit(1);
+      }
+      if (!['anthropic', 'openai', 'gemini'].includes(provider)) {
+        console.error('Provider must be: anthropic, openai, or gemini');
+        process.exit(1);
+      }
+      configureByok(provider as 'anthropic' | 'openai' | 'gemini', key);
+      console.log(`AI provider set: ${provider}`);
+      console.log('AI diagnosis is now enabled. Run vision-test-harness connect to inspect your UI.');
       break;
     }
-    case 'logout':
-      logout();
-      console.log('Logged out.');
+    case 'byok-clear':
+      clearByok();
+      console.log('BYOK key cleared.');
       break;
     case 'status': {
       const status = getStatus();
       console.log(JSON.stringify(status, null, 2));
       break;
     }
-    default:
-      // No command or 'serve' — start MCP server
+    case 'badge': {
+      const format = args[0] ?? 'markdown';
+      const statusArg = (args[1] ?? 'passing') as 'passing' | 'failing' | 'unknown';
+      if (format === 'svg') {
+        const svg = generateBadgeSvg({ status: statusArg });
+        console.log(svg);
+      } else if (format === 'markdown') {
+        console.log(generateMarkdownBadge());
+      } else {
+        console.error('Usage: vision-test-harness badge [markdown|svg] [passing|failing|unknown]');
+        process.exit(1);
+      }
+      break;
+    }
+    case 'init': {
+      await cliInit(args);
+      break;
+    }
+    case 'help': {
+      console.log(`
+Vision Test Harness — Give AI eyes to see and fix your UI.
+
+Commands:
+  init [name]                      Create a starter test suite YAML file
+  run <suite> [flow]               Run a test suite
+  list [directory]                 List available test suites
+  connect                          Connect to real Chrome via CDP
+  capture <preset>                 Marketing screenshots with privacy overlay
+  byok <anthropic|openai|gemini> <key>  Configure AI provider for diagnosis
+  byok-clear                       Remove saved AI key
+  status                           Show AI provider status
+  badge [markdown|svg]             Generate a README badge
+
+Getting started:
+  1. vision-test-harness init my-app
+  2. Edit test-suites/my-app.yaml with your URL and flows
+  3. vision-test-harness run my-app
+
+AI diagnosis (optional):
+  Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY in your environment.
+  Or: vision-test-harness byok anthropic <your-key>
+  Then: vision-test-harness connect
+
+https://github.com/upgpt-ai/vision-test-harness
+`);
+      break;
+    }
+    case 'serve':
       await startServer();
+      break;
+    default:
+      // No command: if running in a terminal, show getting started.
+      // If piped (MCP client), start the server.
+      if (process.stdin.isTTY && !command) {
+        const suites = listSuites();
+        if (suites.length > 0) {
+          console.log('Vision Test Harness\n');
+          console.log(`Found ${suites.length} test suite${suites.length > 1 ? 's' : ''}:`);
+          for (const s of suites) {
+            console.log(`  - ${s.name} (${s.type})`);
+          }
+          console.log(`\nRun a suite: vision-test-harness run ${suites[0].name}`);
+          console.log('Run all:     vision-test-harness help');
+        } else {
+          console.log(`Vision Test Harness — Give AI eyes to see and fix your UI.
+
+Get started in 3 steps:
+
+  1. vision-test-harness init my-app
+     Creates test-suites/my-app.yaml with a working example.
+
+  2. Edit test-suites/my-app.yaml
+     Set your base_url and customize the test flows.
+
+  3. vision-test-harness run my-app
+     Runs tests, captures screenshots, generates an HTML report.
+
+AI diagnosis: set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY.
+Or: vision-test-harness byok anthropic <your-key>
+
+All commands: vision-test-harness help
+Docs: https://github.com/upgpt-ai/vision-test-harness`);
+        }
+      } else if (command) {
+        console.error(`Unknown command: ${command}\nRun: vision-test-harness help`);
+        process.exit(1);
+      } else {
+        await startServer();
+      }
   }
 }
 

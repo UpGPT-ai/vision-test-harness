@@ -8,7 +8,10 @@ import type { WordPressClient } from '../browser/wordpress-adapter.js';
 import type { ViewSkill } from '../schema.js';
 import { compareImages } from '../screenshot/diff.js';
 import { applyPrivacyOverlay } from '../browser/privacy-overlay.js';
-import { wpLogin, wpActivatePlugin, wpNavigateAdmin, wpAssertNotice } from './wordpress-steps.js';
+import {
+  wpLogin, wpActivatePlugin, wpNavigateAdmin, wpAssertNotice,
+  wpCreatePost, wpEditPage, wpCheckFrontend, wpWooCommerceAddProduct, wpVerifyPluginSettings,
+} from './wordpress-steps.js';
 import path from 'path';
 import fs from 'fs';
 
@@ -23,6 +26,8 @@ export interface StepContext {
   viewSkills?: ViewSkill[];
   /** Base URL for sidebar server (localhost mode) — navigate URLs resolved against this */
   sidebarBaseUrl?: string;
+  /** Base URL from suite config (web-app mode) — navigate URLs resolved against this */
+  baseUrl?: string;
 }
 
 export interface StepResult {
@@ -71,11 +76,14 @@ export async function executeStep(step: Step, ctx: StepContext): Promise<StepRes
     switch (step.action) {
       case 'navigate': {
         let url = step.url;
-        // Resolve relative paths (e.g., "sidebar/index.html") against sidebarBaseUrl
-        if (ctx.sidebarBaseUrl && !url.startsWith('http') && !url.startsWith('chrome')) {
-          url = `${ctx.sidebarBaseUrl}/${url}`;
+        // Resolve relative paths against sidebarBaseUrl (extensions) or baseUrl (web apps)
+        if (!url.startsWith('http') && !url.startsWith('chrome')) {
+          const base = ctx.sidebarBaseUrl ?? ctx.baseUrl;
+          if (base) {
+            url = url.startsWith('/') ? `${base.replace(/\/$/, '')}${url}` : `${base.replace(/\/$/, '')}/${url}`;
+          }
         }
-        await page.goto(url, { waitUntil: 'load' });
+        await page.goto(url, { waitUntil: step.waitUntil ?? 'load' });
         return result('pass');
       }
 
@@ -225,6 +233,47 @@ export async function executeStep(step: Step, ctx: StepContext): Promise<StepRes
 
       case 'wp_assert_notice': {
         await wpAssertNotice(page, step.text, step.type);
+        return result('pass');
+      }
+
+      case 'wp_create_post': {
+        const wpResult = await wpCreatePost(page, step.title, step.content, {
+          status: step.status,
+          category: step.category,
+        });
+        if (wpResult.status === 'fail') return result('fail', { error: wpResult.error });
+        return result('pass');
+      }
+
+      case 'wp_edit_page': {
+        const wpResult = await wpEditPage(page, step.page_id, {
+          title: step.title,
+          content: step.content,
+        });
+        if (wpResult.status === 'fail') return result('fail', { error: wpResult.error });
+        return result('pass');
+      }
+
+      case 'wp_check_frontend': {
+        const wpResult = await wpCheckFrontend(page, step.slug);
+        if (wpResult.status === 'fail') return result('fail', { error: wpResult.error });
+        return result('pass');
+      }
+
+      case 'wp_woocommerce_add_product': {
+        const wpResult = await wpWooCommerceAddProduct(page, step.name, step.price, {
+          type: step.product_type,
+          shortDescription: step.short_description,
+          sku: step.sku,
+          publish: step.publish,
+        });
+        if (wpResult.status === 'fail') return result('fail', { error: wpResult.error });
+        return result('pass');
+      }
+
+      case 'wp_verify_plugin_settings': {
+        const wpResult = await wpVerifyPluginSettings(page, step.plugin_slug, step.expected_values);
+        if (wpResult.status === 'fail') return result('fail', { error: wpResult.error });
         return result('pass');
       }
 
